@@ -1,5 +1,23 @@
 ![SVG Banners](https://svg-banners.vercel.app/api?type=origin&text1=CosyVoice🤠&text2=Text-to-Speech%20💖%20Large%20Language%20Model&width=800&height=210)
 
+
+## What`s new in FastCosyVoice
+
+- More optimized inference
+- Fixed expensive calculations
+- Apply fp16 to llm module
+- Example with faster inference
+
+### Examples:
+
+`simple_run.py` - fast way to try model
+
+`run.py` - inference with torch.compile (take time for compiling and warming)
+
+`benchmark_llm.py` - benchmark llm module in different configurations
+
+Any questions you can discuss with author in [Telegram](https://t.me/xVibeNot)
+
 ## 👉🏻 CosyVoice 👈🏻
 
 **Fun-CosyVoice 3.0**: [Demos](https://funaudiollm.github.io/cosyvoice3/); [Paper](https://arxiv.org/pdf/2505.17589); [Modelscope](https://www.modelscope.cn/models/FunAudioLLM/Fun-CosyVoice3-0.5B-2512); [Huggingface](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512); [CV3-Eval](https://github.com/FunAudioLLM/CV3-Eval)
@@ -18,25 +36,6 @@
 - **Text Normalization**: Supports reading of numbers, special symbols and various text formats without a traditional frontend module.
 - **Bi-Streaming**: Support both text-in streaming and audio-out streaming, and achieves latency as low as 150ms while maintaining high-quality audio output.
 - **Instruct Support**: Supports various instructions such as languages, dialects, emotions, speed, volume, etc.
-
-## What`s new in FastCosyVoice
-
-- More optimized inference
-- Fixed expensive calculations
-- Apply fp16 to llm module
-- Example with faster inference
-
-### Examples:
-
-`simple_run.py` - fast way to try model
-
-`run.py` - inference with torch.compile (take time for compiling and warming)
-
-`benchmark_llm.py` - benchmark llm module in different configurations
-
-
-[Telegram](https://t.me/xVibeNot)
-
 
 ## Roadmap
 
@@ -105,26 +104,33 @@
 
 - Clone the repo
     ``` sh
-    git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
+    git clone --recursive https://github.com/Brakanier/FastCosyVoice.git
     # If you failed to clone the submodule due to network failures, please run the following command until success
     cd CosyVoice
     git submodule update --init --recursive
     ```
-
-- Install Conda: please see https://docs.conda.io/en/latest/miniconda.html
-- Create Conda env:
+- Faster way:
 
     ``` sh
-    conda create -n cosyvoice -y python=3.10
-    conda activate cosyvoice
-    pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
-
-    # If you encounter sox compatibility issues
-    # ubuntu
-    sudo apt-get install sox libsox-dev
-    # centos
-    sudo yum install sox sox-devel
+    uv sync
     ```
+
+- Original way:
+
+    - Install Conda: please see https://docs.conda.io/en/latest/miniconda.html
+    - Create Conda env:
+
+        ``` sh
+        conda create -n cosyvoice -y python=3.10
+        conda activate cosyvoice
+        pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+
+        # If you encounter sox compatibility issues
+        # ubuntu
+        sudo apt-get install sox libsox-dev
+        # centos
+        sudo yum install sox sox-devel
+        ```
 
 ### Model download
 
@@ -166,7 +172,9 @@ pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 We strongly recommend using `Fun-CosyVoice3-0.5B` for better performance.
 Follow the code in `example.py` for detailed usage of each model.
 ```sh
-python example.py
+python example.py  # original way
+
+python run.py  # faster way
 ```
 
 #### CosyVoice2 vllm Usage
@@ -226,11 +234,7 @@ For more details, you could check [here](https://github.com/FunAudioLLM/CosyVoic
 
 ## Discussion & Communication
 
-You can directly discuss on [Github Issues](https://github.com/FunAudioLLM/CosyVoice/issues).
-
-You can also scan the QR code to join our official Dingding chat group.
-
-<img src="./asset/dingding.png" width="250px">
+You can directly discuss on [Github Issues](https://github.com/Brakanier/FastCosyVoice/issues) or [Original Github Issues](https://github.com/FunAudioLLM/CosyVoice/issues).
 
 ## Acknowledge
 
