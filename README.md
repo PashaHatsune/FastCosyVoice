@@ -9,6 +9,7 @@
 - Apply fp16 to llm module
 - FastCosyVoice class with TensorRT-LLM support
 - Examples with faster inference
+- Translated webui.py
 
 ### Examples:
 
