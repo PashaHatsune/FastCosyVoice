@@ -357,7 +357,7 @@ def main():
         return
     
     # Create output directory
-    Path(OUTPUT_DIR).mkdir(exist_ok=True)
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     
     # Load prompt_text from txt file next to audio
     prompt_text = load_prompt_text(REFERENCE_AUDIO, INSTRUCTION)

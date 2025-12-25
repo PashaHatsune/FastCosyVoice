@@ -10,6 +10,7 @@
 - FastCosyVoice class with TensorRT-LLM support
 - Examples with faster inference
 - Translated webui.py
+- Match-TTS installed from pypi, removed from git submodule
 
 ### Examples:
 
@@ -134,10 +135,7 @@ Tested on **RTX 3090**
 
 - Clone the repo
     ``` sh
-    git clone --recursive https://github.com/Brakanier/FastCosyVoice.git
-    # If you failed to clone the submodule due to network failures, please run the following command until success
-    cd CosyVoice
-    git submodule update --init --recursive
+    git clone https://github.com/Brakanier/FastCosyVoice.git
     ```
 - Faster way:
 

@@ -50,4 +50,3 @@ pretrained_models/*
 *_pb2.py
 *.tar
 output/*
-output_fast/*
