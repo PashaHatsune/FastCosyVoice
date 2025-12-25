@@ -49,6 +49,36 @@ Tested on **RTX 3090**
 | offline + fp16 + TRT Flow + TRT LLM | - | 0.1 |
 
 
+## Install
+
+`uv add git+https://github.com/Brakanier/FastCosyVoice.git`
+
+### Clone 
+
+- Clone the repo
+    ``` sh
+    git clone https://github.com/Brakanier/FastCosyVoice.git
+
+    uv sync
+    ```
+
+- Original way:
+
+    - Install Conda: please see https://docs.conda.io/en/latest/miniconda.html
+    - Create Conda env:
+
+        ``` sh
+        conda create -n cosyvoice -y python=3.10
+        conda activate cosyvoice
+        pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+
+        # If you encounter sox compatibility issues
+        # ubuntu
+        sudo apt-get install sox libsox-dev
+        # centos
+        sudo yum install sox sox-devel
+        ```
+
 
 ## 👉🏻 CosyVoice 👈🏻
 
@@ -129,37 +159,6 @@ Tested on **RTX 3090**
 | Fun-CosyVoice3-0.5B-2512 | ✅ | 0.5B | 1.21 | 78.0 | 2.24 | 71.8 | 6.71 | 75.8 |
 | Fun-CosyVoice3-0.5B-2512_RL | ✅ | 0.5B | 0.81 | 77.4 | 1.68 | 69.5 | 5.44 | 75.0 |
 
-
-## Install
-
-### Clone and install
-
-- Clone the repo
-    ``` sh
-    git clone https://github.com/Brakanier/FastCosyVoice.git
-    ```
-- Faster way:
-
-    ``` sh
-    uv sync
-    ```
-
-- Original way:
-
-    - Install Conda: please see https://docs.conda.io/en/latest/miniconda.html
-    - Create Conda env:
-
-        ``` sh
-        conda create -n cosyvoice -y python=3.10
-        conda activate cosyvoice
-        pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
-
-        # If you encounter sox compatibility issues
-        # ubuntu
-        sudo apt-get install sox libsox-dev
-        # centos
-        sudo yum install sox sox-devel
-        ```
 
 ### Model download
 
