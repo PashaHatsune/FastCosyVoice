@@ -51,3 +51,5 @@ pretrained_models/*
 *.tar
 output/*
 model.cache
+
+.env
