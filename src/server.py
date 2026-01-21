@@ -546,7 +546,7 @@ async def tts(
 
 
 import threading
-pending = threading.Semaphore(1)
+pending = threading.Semaphore(2)
 
 @app.post("/api/tts/async")
 async def tts_async(
