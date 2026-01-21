@@ -54,3 +54,4 @@ output/*
 model.cache
 
 .env
+.github
