@@ -116,7 +116,10 @@ class GPUManager:
         logger.info(f"Загружаем модель: {model_dir}...")
         embed_start = time.time()
         self.model = CosyVoice3(
-            model_dir=model_dir
+            model_dir=model_dir,
+            load_trt=True,
+            fp16=True,
+            load_vllm=True
         )
         self.model_dir = model_dir
         embed_time = time.time() - embed_start
