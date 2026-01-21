@@ -21,7 +21,7 @@ def tts_zero_shot(
         "text": text,
         "mode": "zero_shot",
         "spk_id": SPK_ID,
-        "speed": speed,
+        "speed": speed, 
     }
 
     r = requests.post(f"{BASE_URL}/api/tts/async", data=data, files=files)
