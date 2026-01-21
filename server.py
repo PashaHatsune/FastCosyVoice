@@ -8,6 +8,7 @@ import time
 import uuid
 import json
 import asyncio
+from loguru import logger
 import threading
 from pathlib import Path
 from typing import Optional, Generator
@@ -25,27 +26,11 @@ from pydantic import BaseModel
 ROOT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ROOT_DIR / "third_party/Matcha-TTS"))
 
-from cosyvoice.cli.cosyvoice import AutoModel
+from cosyvoice.cli.cosyvoice import CosyVoice3
 from cosyvoice.utils.file_utils import load_wav
+from asr import ASR
 
-# Fun-ASR-Nano for auto transcription
-_asr_model = None
-
-def get_asr_model():
-    return
-
-
-def transcribe_audio(audio_path: str) -> str:
-    """Use Fun-ASR-Nano to transcribe audio file"""
-    model = get_asr_model()
-    res = model.generate(
-        input=[audio_path],
-        cache={},
-        batch_size=1,
-        language="auto",
-        itn=True,
-    )
-    return res[0]["text"].strip() if res else ""
+asr = ASR()
 
 # Directories
 INPUT_DIR = Path("data/input")
@@ -124,19 +109,26 @@ class GPUManager:
                 self._load_model(model_dir)
             return self.model
     
+    
     def _load_model(self, model_dir: str):
         if self.model is not None:
             self.offload()
-        print(f"Loading model from {model_dir}...")
-        self.model = AutoModel(model_dir=model_dir)
+        logger.info(f"Загружаем модель: {model_dir}...")
+        embed_start = time.time()
+        self.model = CosyVoice3(
+            model_dir=model_dir
+        )
         self.model_dir = model_dir
-        print(f"Model loaded successfully!")
+        embed_time = time.time() - embed_start
+
+        logger.success(f"Модель загружена! Время: {embed_time}")
+    
     
     def preload(self):
         """启动时预热模型和所有音色的 embedding"""
-        print("Preloading model...")
+        logger.info("Загружем модель...")
         model = self.get_model()
-        print("Model preloaded!")
+        logger.success("Модель загружена")
         
         # 预热所有已保存音色的 embedding
         voices = voice_manager.list_all()
@@ -154,7 +146,7 @@ class GPUManager:
                         print(f"  ✓ Cached: {v['name']} ({v['id']})")
                     except Exception as e:
                         print(f"  ✗ Failed: {v['name']} - {e}")
-            print(f"Voice embeddings cached: {len(model.frontend.prompt_cache)}")
+            # print(f"Voice embeddings cached: {len(model.frontend.prompt_cache)}")
         
         print("Model preloaded and ready!")
     
@@ -305,12 +297,14 @@ async def openai_speech(request: SpeechRequest):
     
     # 检查是否是自定义音色
     custom_voice = voice_manager.get(request.voice)
+    logger.debug(f"custom_voice: {custom_voice}")
     
     if custom_voice:
         # 使用自定义音色
         prompt_audio = custom_voice["audio_path"]
         # 添加 <|endofprompt|> 前缀修复音频重复问题 (GitHub Issue #967, #1704)
         prompt_text = f'<|endofprompt|>{custom_voice["text"]}'
+        logger.debug(f"prompt_text: {prompt_text}")
         
         if request.instruct:
             # instruct 模式
@@ -320,12 +314,15 @@ async def openai_speech(request: SpeechRequest):
                     stream=(request.response_format == "pcm"), speed=request.speed
                 )
             else:
+                logger.debug(f"request.input, prompt_text, prompt_audio: {request.input, prompt_text, prompt_audio}")
                 output = model.inference_zero_shot(
                     request.input, prompt_text, prompt_audio,
                     stream=(request.response_format == "pcm"), speed=request.speed
                 )
         else:
+            
             # zero_shot 模式
+            logger.debug(f"request.input, prompt_text, prompt_audio: {request.input, prompt_text, prompt_audio}")
             output = model.inference_zero_shot(
                 request.input, prompt_text, prompt_audio,
                 stream=(request.response_format == "pcm"), speed=request.speed
@@ -371,7 +368,9 @@ async def create_voice(
     try:
         # 如果没有提供文本，使用 Fun-ASR 转写
         if not text:
-            text = transcribe_audio(str(temp_path))
+            text = await asr.transcribe(
+                audio=str(temp_path)
+            )
         
         voice_id = voice_manager.create(name, text, content)
         return {
@@ -483,7 +482,9 @@ async def tts(
             # 自动识别 prompt_text (仅当未使用自定义音色且没有提供 prompt_text 时)
             if not prompt_text and not custom_voice:
                 print("Auto transcribing prompt audio with Fun-ASR...")
-                prompt_text = transcribe_audio(prompt_audio)
+                prompt_text = asr.transcribe(
+                    audio=prompt_audio
+                )
                 # 添加前缀修复重复问题
                 prompt_text = f'<|endofprompt|>{prompt_text}'
                 print(f"Transcribed: {prompt_text}")
@@ -540,6 +541,10 @@ async def tts(
             Path(prompt_audio).unlink()
         raise
 
+
+import threading
+pending = threading.Semaphore(1)
+
 @app.post("/api/tts/async")
 async def tts_async(
     background_tasks: BackgroundTasks,
@@ -553,42 +558,72 @@ async def tts_async(
 ):
     task_id = uuid.uuid4().hex
     tasks[task_id] = {"status": "pending", "progress": 0}
-    
+
+
+
     prompt_path = None
+    prompt_text_final = prompt_text
+
+
     if prompt_wav:
         content = await prompt_wav.read()
         prompt_path = INPUT_DIR / f"prompt_{task_id}.wav"
         prompt_path.write_bytes(content)
+        prompt_audio = str(prompt_path)
+
+    elif spk_id:
+        custom_voice = voice_manager.get(spk_id)
+        logger.debug(f"custom_voice: {custom_voice}")
+        if not custom_voice:
+            raise HTTPException(400, "Unknown spk_id")
+
+        prompt_audio = custom_voice["audio_path"]
+        logger.debug(f"prompt_audio: {prompt_audio}")
+        prompt_text_final = "<|endofprompt|>" + custom_voice["text"]
     
     def process():
-        try:
-            tasks[task_id]["status"] = "processing"
-            model = gpu_manager.get_model()
-            
-            if mode == "sft":
-                output = model.inference_sft(text, spk_id, stream=False, speed=speed)
-            elif mode == "zero_shot":
-                output = model.inference_zero_shot(text, prompt_text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
-            elif mode == "cross_lingual":
-                output = model.inference_cross_lingual(text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
-            elif mode == "instruct":
-                if hasattr(model, 'inference_instruct2'):
-                    output = model.inference_instruct2(text, instruct_text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
-                else:
-                    output = model.inference_instruct(text, spk_id, instruct_text, stream=False, speed=speed)
-            
-            speeches = [chunk['tts_speech'] for chunk in output]
-            full_speech = torch.cat(speeches, dim=1)
-            filename = f"tts_{task_id}.wav"
-            save_audio(full_speech, model.sample_rate, filename)
-            
-            tasks[task_id] = {"status": "completed", "progress": 100, "output_file": filename}
-        except Exception as e:
-            tasks[task_id] = {"status": "failed", "error": str(e)}
-        finally:
-            if prompt_path and prompt_path.exists():
-                prompt_path.unlink()
-    
+        with pending:
+            try:
+                tasks[task_id]["status"] = "processing"
+                model = gpu_manager.get_model()
+                
+                if mode == "sft":
+                    output = model.inference_sft(text, spk_id, stream=False, speed=speed)
+
+                elif mode == "zero_shot":
+                    if not prompt_audio:
+                        raise RuntimeError("zero_shot requires prompt audio")
+
+                    output = model.inference_zero_shot(
+                        text,
+                        prompt_text_final,
+                        prompt_audio,
+                        stream=False,
+                        speed=speed
+                    )
+
+                elif mode == "cross_lingual":
+                    output = model.inference_cross_lingual(text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
+                
+                elif mode == "instruct":
+                    if hasattr(model, 'inference_instruct2'):
+                        output = model.inference_instruct2(text, instruct_text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
+                    
+                    else:
+                        output = model.inference_instruct(text, spk_id, instruct_text, stream=False, speed=speed)
+                
+                speeches = [chunk['tts_speech'] for chunk in output]
+                full_speech = torch.cat(speeches, dim=1)
+                filename = f"tts_{task_id}.wav"
+                save_audio(full_speech, model.sample_rate, filename)
+                
+                tasks[task_id] = {"status": "completed", "progress": 100, "output_file": filename}
+            except Exception as e:
+                tasks[task_id] = {"status": "failed", "error": str(e)}
+            finally:
+                if prompt_path and prompt_path.exists():
+                    prompt_path.unlink()
+        
     background_tasks.add_task(process)
     return {"task_id": task_id}
 
