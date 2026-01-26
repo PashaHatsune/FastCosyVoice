@@ -586,11 +586,8 @@ async def tts_async(
             try:
                 tasks[task_id]["status"] = "processing"
                 model = gpu_manager.get_model()
-                
-                if mode == "sft":
-                    output = model.inference_sft(text, spk_id, stream=False, speed=speed)
 
-                elif mode == "zero_shot":
+                if mode == "zero_shot":
                     if not prompt_audio:
                         raise RuntimeError("zero_shot requires prompt audio")
 
@@ -603,6 +600,9 @@ async def tts_async(
                         stream=False,
 
                     )
+                
+                elif mode == "sft":
+                    output = model.inference_sft(text, spk_id, stream=False, speed=speed)
 
                 elif mode == "cross_lingual":
                     output = model.inference_cross_lingual(text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
