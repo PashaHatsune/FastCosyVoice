@@ -362,121 +362,27 @@ async def list_models():
 
 # ============== Legacy API ==============
 
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "gpu": gpu_manager.status()}
 
+
 @app.get("/api/status")
 async def api_status():
     return gpu_manager.status()
+
 
 @app.post("/api/offload")
 async def offload_gpu():
     gpu_manager.offload()
     return {"status": "success", "message": "GPU memory released"}
 
+
 @app.get("/api/speakers")
 async def list_speakers():
     model = gpu_manager.get_model()
     return {"speakers": model.list_available_spks()}
-
-@app.post("/api/tts")
-async def tts(
-    voice: str = Form(""),
-    text: str = Form(...),
-    mode: str = Form("zero_shot"),
-    prompt_text: str = Form(""),
-    instruct_text: str = Form(""),
-    spk_id: str = Form(""),
-    speed: float = Form(1.0),
-    stream: bool = Form(False),
-    prompt_wav: Optional[UploadFile] = File(None)
-):
-    model = gpu_manager.get_model()
-    prompt_audio = None
-    is_temp_file = False  # 标记是否是临时文件，只有临时文件才需要清理
-    
-    # 优先使用自定义音色
-    custom_voice = voice_manager.get(voice) if voice else None
-    if custom_voice:
-        prompt_audio = custom_voice["audio_path"]
-        # 添加 <|endofprompt|> 前缀修复音频重复问题
-        prompt_text = f'<|endofprompt|>{custom_voice["text"]}'
-    elif prompt_wav:
-        content = await prompt_wav.read()
-        temp_path = INPUT_DIR / f"prompt_{uuid.uuid4().hex}.wav"
-        temp_path.write_bytes(content)
-        prompt_audio = str(temp_path)
-        is_temp_file = True  # 上传的文件是临时文件
-    
-    try:
-        # 参数验证
-        if mode == "zero_shot":
-            if not prompt_audio:
-                raise HTTPException(400, "zero_shot mode requires prompt_wav or voice (custom voice ID)")
-            # 自动识别 prompt_text (仅当未使用自定义音色且没有提供 prompt_text 时)
-            if not prompt_text and not custom_voice:
-                print("Auto transcribing prompt audio with Fun-ASR...")
-                prompt_text = asr.transcribe(
-                    audio=prompt_audio
-                )
-                # 添加前缀修复重复问题
-                prompt_text = f'<|endofprompt|>{prompt_text}'
-                print(f"Transcribed: {prompt_text}")
-        elif mode == "cross_lingual":
-            if not prompt_audio:
-                raise HTTPException(400, "cross_lingual mode requires prompt_wav or voice (custom voice ID)")
-        elif mode == "instruct":
-            if not prompt_audio:
-                raise HTTPException(400, "instruct mode requires prompt_wav or voice (custom voice ID)")
-            if not instruct_text:
-                raise HTTPException(400, "instruct mode requires instruct_text")
-        elif mode == "sft":
-            if not spk_id:
-                raise HTTPException(400, "sft mode requires spk_id (speaker ID)")
-        
-        if mode == "sft":
-            output = model.inference_sft(text, spk_id, stream=stream, speed=speed)
-        elif mode == "zero_shot":
-            output = model.inference_zero_shot(text, prompt_text, prompt_audio, stream=stream, speed=speed)
-        elif mode == "cross_lingual":
-            output = model.inference_cross_lingual(text, prompt_audio, stream=stream, speed=speed)
-        elif mode == "instruct":
-            if hasattr(model, 'inference_instruct2'):
-                output = model.inference_instruct2(text, instruct_text, prompt_audio, stream=stream, speed=speed)
-            else:
-                output = model.inference_instruct(text, spk_id, instruct_text, stream=stream, speed=speed)
-        else:
-            raise HTTPException(400, f"Unknown mode: {mode}")
-        
-        if stream:
-            return StreamingResponse(
-                generate_audio_stream(output, model.sample_rate, cleanup_path=prompt_audio if is_temp_file else None),
-                media_type="audio/pcm"
-            )
-        
-        # Collect all chunks
-        speeches = []
-        for chunk in output:
-            speeches.append(chunk['tts_speech'])
-        
-        full_speech = torch.cat(speeches, dim=1)
-        filename = f"tts_{uuid.uuid4().hex}.wav"
-        output_path = save_audio(full_speech, model.sample_rate, filename)
-        
-        # Cleanup temp file for non-streaming mode (only if it's a temp file)
-        if is_temp_file and prompt_audio and Path(prompt_audio).exists():
-            Path(prompt_audio).unlink()
-        
-        return FileResponse(output_path, media_type="audio/wav", filename=filename)
-    
-    except Exception as e:
-        # Cleanup on error (only if it's a temp file)
-        if is_temp_file and prompt_audio and Path(prompt_audio).exists():
-            Path(prompt_audio).unlink()
-        raise
-
-
 
 
 @app.post("/api/tts/async")
