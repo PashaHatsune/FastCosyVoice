@@ -296,67 +296,6 @@ class SpeechRequest(BaseModel):
     speed: float = 1.0
     instruct: Optional[str] = None  # 指令文本（方言、情感等）
 
-@app.post("/v1/audio/speech")
-async def openai_speech(request: SpeechRequest):
-    """OpenAI-compatible TTS API"""
-    model = gpu_manager.get_model()
-    
-    # 检查是否是自定义音色
-    custom_voice = voice_manager.get(request.voice)
-    logger.debug(f"custom_voice: {custom_voice}")
-    
-    if custom_voice:
-        # 使用自定义音色
-        prompt_audio = custom_voice["audio_path"]
-        # 添加 <|endofprompt|> 前缀修复音频重复问题 (GitHub Issue #967, #1704)
-        prompt_text = f'<|endofprompt|>{custom_voice["text"]}'
-        logger.debug(f"prompt_text: {prompt_text}")
-        
-        if request.instruct:
-            # instruct 模式
-            if hasattr(model, 'inference_instruct2'):
-                output = model.inference_instruct2(
-                    request.input, request.instruct, prompt_audio,
-                    stream=(request.response_format == "pcm"), speed=request.speed
-                )
-            else:
-                logger.debug(f"request.input, prompt_text, prompt_audio: {request.input, prompt_text, prompt_audio}")
-                output = model.inference_zero_shot(
-                    request.input, prompt_text, prompt_audio,
-                    stream=(request.response_format == "pcm"), speed=request.speed
-                )
-        else:
-            
-            # zero_shot 模式
-            logger.debug(f"request.input, prompt_text, prompt_audio: {request.input, prompt_text, prompt_audio}")
-            output = model.inference_zero_shot(
-                request.input, prompt_text, prompt_audio,
-                stream=(request.response_format == "pcm"), speed=request.speed
-            )
-    else:
-        # 使用预训练音色（如果有）
-        available_spks = model.list_available_spks()
-        if request.voice in available_spks:
-            output = model.inference_sft(
-                request.input, request.voice,
-                stream=(request.response_format == "pcm"), speed=request.speed
-            )
-        else:
-            raise HTTPException(400, f"Voice '{request.voice}' not found. Use /v1/voices to list available voices or create custom voice via /v1/voices/create")
-    
-    if request.response_format == "pcm":
-        return StreamingResponse(
-            generate_audio_stream(output, model.sample_rate),
-            media_type="audio/pcm",
-            headers={"X-Sample-Rate": str(model.sample_rate)}
-        )
-    
-    # 收集所有 chunks 并返回 WAV
-    speeches = [chunk['tts_speech'] for chunk in output]
-    full_speech = torch.cat(speeches, dim=1)
-    filename = f"speech_{uuid.uuid4().hex[:8]}.wav"
-    output_path = save_audio(full_speech, model.sample_rate, filename)
-    return FileResponse(output_path, media_type="audio/wav", filename=filename)
 
 @app.post("/v1/voices/create")
 async def create_voice(
@@ -410,16 +349,6 @@ async def delete_voice(voice_id: str):
         return {"success": True, "message": "Voice deleted"}
     raise HTTPException(404, "Voice not found")
 
-@app.get("/v1/voices")
-async def list_voices():
-    """列出所有可用音色（预训练 + 自定义）"""
-    model = gpu_manager.get_model()
-    preset_voices = model.list_available_spks()
-    custom_voices = voice_manager.list_all()
-    return {
-        "preset_voices": preset_voices,
-        "custom_voices": custom_voices
-    }
 
 @app.get("/v1/models")
 async def list_models():
