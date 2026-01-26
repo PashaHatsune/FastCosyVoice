@@ -390,10 +390,10 @@ async def tts_async(
     background_tasks: BackgroundTasks,
     text: str = Form(...),
     mode: str = Form("zero_shot"),
-    prompt_text: str = Form(""),
-    instruct_text: str = Form(""),
+    prompt_text: Optional[str] = Form(""),
+    instruct_text: Optional[str] = Form(""),
     spk_id: str = Form(""),
-    speed: float = Form(1.0),
+    speed: float = Form(),
     prompt_wav: Optional[UploadFile] = File(None)
 ):
     task_id = uuid.uuid4().hex
