@@ -562,11 +562,8 @@ async def tts_async(
     task_id = uuid.uuid4().hex
     tasks[task_id] = {"status": "pending", "progress": 0}
 
-
-
     prompt_path = None
     prompt_text_final = prompt_text
-
 
     if prompt_wav:
         content = await prompt_wav.read()
@@ -598,11 +595,13 @@ async def tts_async(
                         raise RuntimeError("zero_shot requires prompt audio")
 
                     output = model.inference_zero_shot(
-                        text,
-                        prompt_text_final,
-                        prompt_audio,
+                        tts_text=text,
+                        prompt_text=prompt_text_final,
+                        prompt_wav=prompt_audio,
+                        zero_shot_spk_id=spk_id,
+                        speed=speed,
                         stream=False,
-                        speed=speed
+
                     )
 
                 elif mode == "cross_lingual":
