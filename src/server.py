@@ -26,6 +26,9 @@ from pydantic import BaseModel
 ROOT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ROOT_DIR / "third_party/Matcha-TTS"))
 
+import threading
+pending = threading.Semaphore(2)
+
 from cosyvoice.cli.cosyvoice import CosyVoice3
 from cosyvoice.utils.file_utils import load_wav
 from asr import ASR
@@ -545,8 +548,7 @@ async def tts(
         raise
 
 
-import threading
-pending = threading.Semaphore(2)
+
 
 @app.post("/api/tts/async")
 async def tts_async(
@@ -625,7 +627,7 @@ async def tts_async(
             finally:
                 if prompt_path and prompt_path.exists():
                     prompt_path.unlink()
-        
+
     background_tasks.add_task(process)
     return {"task_id": task_id}
 
