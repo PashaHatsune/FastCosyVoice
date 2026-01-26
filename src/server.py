@@ -601,18 +601,18 @@ async def tts_async(
 
                     )
                 
-                elif mode == "sft":
-                    output = model.inference_sft(text, spk_id, stream=False, speed=speed)
+                # elif mode == "sft":
+                #     output = model.inference_sft(text, spk_id, stream=False, speed=speed)
 
-                elif mode == "cross_lingual":
-                    output = model.inference_cross_lingual(text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
+                # elif mode == "cross_lingual":
+                #     output = model.inference_cross_lingual(text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
                 
-                elif mode == "instruct":
-                    if hasattr(model, 'inference_instruct2'):
-                        output = model.inference_instruct2(text, instruct_text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
+                # elif mode == "instruct":
+                #     if hasattr(model, 'inference_instruct2'):
+                #         output = model.inference_instruct2(text, instruct_text, str(prompt_path) if prompt_path else None, stream=False, speed=speed)
                     
-                    else:
-                        output = model.inference_instruct(text, spk_id, instruct_text, stream=False, speed=speed)
+                #     else:
+                #         output = model.inference_instruct(text, spk_id, instruct_text, stream=False, speed=speed)
                 
                 speeches = [chunk['tts_speech'] for chunk in output]
                 full_speech = torch.cat(speeches, dim=1)
