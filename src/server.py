@@ -8,6 +8,7 @@ import time
 import uuid
 import json
 import asyncio
+import random
 from loguru import logger
 import threading
 from pathlib import Path
@@ -30,7 +31,8 @@ import threading
 pending = threading.Semaphore(2)
 
 from cosyvoice.cli.cosyvoice import CosyVoice3
-from cosyvoice.utils.file_utils import load_wav
+from cosyvoice.utils.common import set_all_random_seed
+
 from asr import ASR
 
 asr = ASR()
@@ -120,9 +122,9 @@ class GPUManager:
         embed_start = time.time()
         self.model = CosyVoice3(
             model_dir=model_dir,
-            load_trt=True,
+            load_trt=False,
             fp16=True,
-            load_vllm=True
+            load_vllm=False
         )
         self.model_dir = model_dir
         embed_time = time.time() - embed_start
@@ -384,6 +386,11 @@ async def list_speakers():
     model = gpu_manager.get_model()
     return {"speakers": model.list_available_spks()}
 
+import io
+import soundfile as sf
+
+
+audio_task_complete: dict[str, bytes] = {}
 
 @app.post("/api/tts/async")
 async def tts_async(
@@ -393,14 +400,20 @@ async def tts_async(
     prompt_text: Optional[str] = Form(""),
     instruct_text: Optional[str] = Form(""),
     spk_id: str = Form(""),
-    speed: float = Form(),
+    speed: float = Form(1.0),
+    seed: Optional[int] = Form(random.randint(121256121, 333443356)),
     prompt_wav: Optional[UploadFile] = File(None)
 ):
     task_id = uuid.uuid4().hex
-    tasks[task_id] = {"status": "pending", "progress": 0}
+    tasks[task_id] = {
+        "status": "pending",
+        "progress": 0
+    }
 
     prompt_path = None
-    prompt_text_final = prompt_text
+    prompt_text_final = prompt_text or ""
+    spk_id1 = None
+    prompt_audio = ""
 
     if prompt_wav:
         content = await prompt_wav.read()
@@ -408,14 +421,22 @@ async def tts_async(
         prompt_path.write_bytes(content)
         prompt_audio = str(prompt_path)
 
-    elif spk_id:
-        custom_voice = voice_manager.get(spk_id)
+    elif spk_id1:
+        custom_voice = voice_manager.get(
+            voice_id=spk_id
+        )
+        
         logger.debug(f"custom_voice: {custom_voice}")
         if not custom_voice:
-            raise HTTPException(400, "Unknown spk_id")
+            raise HTTPException(
+                status_code=400, 
+                detail="Unknown spk_id"
+            )
+        
+        
 
-        prompt_audio = custom_voice["audio_path"]
-        logger.debug(f"prompt_audio: {prompt_audio}")
+        # prompt_audio = custom_voice["audio_path"]
+        # logger.debug(f"prompt_audio: {prompt_audio}")
         prompt_text_final = "<|endofprompt|>" + custom_voice["text"]
     
     def process():
@@ -425,18 +446,22 @@ async def tts_async(
                 model = gpu_manager.get_model()
 
                 if mode == "zero_shot":
-                    if not prompt_audio:
-                        raise RuntimeError("zero_shot requires prompt audio")
+                    # if not prompt_audio:
+                    #     raise RuntimeError("zero_shot requires prompt audio")
+
+                    set_all_random_seed(seed=seed)
 
                     output = model.inference_zero_shot(
                         tts_text=text,
-                        prompt_text=prompt_text_final,
-                        prompt_wav=prompt_audio,
+                        prompt_text="",
+                        prompt_wav="",
                         zero_shot_spk_id=spk_id,
                         speed=speed,
                         stream=False,
 
                     )
+
+                    print(output)
                 
                 # elif mode == "sft":
                 #     output = model.inference_sft(text, spk_id, stream=False, speed=speed)
@@ -453,10 +478,18 @@ async def tts_async(
                 
                 speeches = [chunk['tts_speech'] for chunk in output]
                 full_speech = torch.cat(speeches, dim=1)
-                filename = f"tts_{task_id}.wav"
-                save_audio(full_speech, model.sample_rate, filename)
-                
-                tasks[task_id] = {"status": "completed", "progress": 100, "output_file": filename}
+
+                # -> numpy
+                audio = full_speech.squeeze(0).cpu().numpy()
+
+                # -> байты wav
+                buf = io.BytesIO()
+                sf.write(buf, audio, samplerate=model.sample_rate, format="WAV")
+                wav_bytes = buf.getvalue()
+
+                audio_task_complete[task_id] = wav_bytes
+
+                tasks[task_id] = {"status": "completed", "progress": 100, "output_file": f"get in /api/download/{task_id}"}
             except Exception as e:
                 tasks[task_id] = {"status": "failed", "error": str(e)}
             finally:
@@ -466,18 +499,27 @@ async def tts_async(
     background_tasks.add_task(process)
     return {"task_id": task_id}
 
+
 @app.get("/api/task/{task_id}")
 async def get_task(task_id: str):
     if task_id not in tasks:
         raise HTTPException(404, "Task not found")
     return tasks[task_id]
 
-@app.get("/api/download/{filename}")
-async def download(filename: str):
-    path = OUTPUT_DIR / filename
-    if not path.exists():
-        raise HTTPException(404, "File not found")
-    return FileResponse(str(path), media_type="audio/wav", filename=filename)
+
+@app.get("/api/download/{task_id}")
+async def download(task_id: str):
+    if task_id not in audio_task_complete:
+        raise HTTPException(404, "Audio not ready")
+
+    return StreamingResponse(
+        io.BytesIO(audio_task_complete[task_id]),
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": f'inline; filename="{task_id}.wav"'
+        }
+    )
+
 
 # UI
 @app.get("/", response_class=HTMLResponse)
