@@ -31,6 +31,7 @@ import threading
 pending = threading.Semaphore(2)
 
 from cosyvoice.cli.cosyvoice import CosyVoice3
+
 from cosyvoice.utils.common import set_all_random_seed
 
 from asr import ASR
@@ -101,7 +102,7 @@ voice_manager = VoiceManager(VOICES_DIR)
 # GPU Manager - 禁用自动卸载，启动时预热
 class GPUManager:
     def __init__(self):
-        self.model = None
+        self.model: CosyVoice3 = None
         self.model_dir = None
         self.lock = threading.Lock()
         self.prompt_cache = {}  # 缓存 prompt 特征
@@ -306,30 +307,53 @@ async def create_voice(
     text: str = Form("")
 ):
     """创建自定义音色"""
-    content = await audio.read()
-    
-    # 保存临时文件用于转写
-    temp_path = INPUT_DIR / f"temp_{uuid.uuid4().hex}.wav"
-    temp_path.write_bytes(content)
-    
+    print(audio.filename)
+
+    model = gpu_manager.get_model()
+
     try:
-        # 如果没有提供文本，使用 Fun-ASR 转写
-        if not text:
-            text = await asr.transcribe(
-                audio=str(temp_path)
-            )
+        model.add_zero_shot_spk(
+            prompt_text=text,
+            prompt_wav=audio.filename,
+            zero_shot_spk_id=name
+
+        )
+    except Exception as e:
+        logger.error(e)
         
-        voice_id = voice_manager.create(name, text, content)
-        return {
-            "success": True,
-            "voice_id": voice_id,
-            "name": name,
-            "text": text,
-            "message": f"音色创建成功，使用 voice='{voice_id}' 调用 /v1/audio/speech"
-        }
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
+
+    print("DONE")
+    print(model.list_available_spks())
+
+
+
+
+
+
+
+    
+    # # 保存临时文件用于转写
+    # temp_path = INPUT_DIR / f"temp_{uuid.uuid4().hex}.wav"
+    # temp_path.write_bytes(content)
+    
+    # try:
+    #     # 如果没有提供文本，使用 Fun-ASR 转写
+    #     if not text:
+    #         text = await asr.transcribe(
+    #             audio=str(temp_path)
+    #         )
+        
+    #     voice_id = voice_manager.create(name, text, content)
+    #     return {
+    #         "success": True,
+    #         "voice_id": voice_id,
+    #         "name": name,
+    #         "text": text,
+    #         "message": f"音色创建成功，使用 voice='{voice_id}' 调用 /v1/audio/speech"
+    #     }
+    # finally:
+    #     if temp_path.exists():
+    #         temp_path.unlink()
 
 @app.get("/v1/voices/custom")
 async def list_custom_voices():
