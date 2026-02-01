@@ -53,39 +53,56 @@ class VoiceManager:
         self.index_file = voices_dir / "voices.json"
         self.voices = self._load_index()
     
-    def _load_index(self) -> dict:
+    def _load_index(
+            self
+    ) -> dict:
+        
         if self.index_file.exists():
             return json.loads(self.index_file.read_text())
         return {}
     
-    def _save_index(self):
+    def _save_index(
+            self
+    ) -> None:
         self.index_file.write_text(json.dumps(self.voices, ensure_ascii=False, indent=2))
     
-    def create(self, name: str, text: str, audio_data: bytes) -> str:
-        voice_id = uuid.uuid4().hex[:12]
-        voice_dir = self.voices_dir / voice_id
-        voice_dir.mkdir(exist_ok=True)
-        
-        audio_path = voice_dir / "prompt.wav"
-        audio_path.write_bytes(audio_data)
-        
-        self.voices[voice_id] = {
-            "id": voice_id,
-            "name": name,
-            "text": text,
-            "audio_path": str(audio_path),
-            "created_at": int(time.time())
-        }
-        self._save_index()
-        return voice_id
+
+    def create(
+            self,
+            name: str,
+            audio: str,
+            text: str,
+            model: CosyVoice3
+    ) -> str:
+
+        try:
+            result = model.add_zero_shot_spk(
+                prompt_text=text,
+                prompt_wav=audio.filename,
+                zero_shot_spk_id=name
+
+            )
+        except Exception as e:
+            raise
+        return result
     
-    def get(self, voice_id: str) -> Optional[dict]:
+
+    def get(
+            self,
+            voice_id: str
+    ) -> Optional[dict]:
+
         return self.voices.get(voice_id)
+
+
+    def list_all(
+            self
+    ) -> list:
     
-    def list_all(self) -> list:
         return [{"id": v["id"], "name": v["name"], "text": v["text"], "created_at": v["created_at"]} 
                 for v in self.voices.values()]
-    
+
+
     def delete(self, voice_id: str) -> bool:
         if voice_id not in self.voices:
             return False
@@ -213,9 +230,6 @@ app = FastAPI(
 
 基于大语言模型的语音合成服务，支持：
 - **零样本克隆** (zero_shot): 使用3-30秒参考音频克隆任意音色
-- **跨语种克隆** (cross_lingual): 跨语言语音合成
-- **指令控制** (instruct): 方言、情感、语速等控制
-- **预训练音色** (sft): 使用内置音色
 
 ### 支持语言
 中文、英文、日语、韩语、德语、西班牙语、法语、意大利语、俄语，以及18+种中文方言
@@ -312,53 +326,23 @@ async def create_voice(
     model = gpu_manager.get_model()
 
     try:
-        model.add_zero_shot_spk(
-            prompt_text=text,
-            prompt_wav=audio.filename,
-            zero_shot_spk_id=name
 
-        )
     except Exception as e:
         logger.error(e)
-        
+        return {
+            "error": e
+        }
 
-    print("DONE")
-    print(model.list_available_spks())
+    return {
+        "speakers": model.list_available_spks()
+    }
 
-
-
-
-
-
-
-    
-    # # 保存临时文件用于转写
-    # temp_path = INPUT_DIR / f"temp_{uuid.uuid4().hex}.wav"
-    # temp_path.write_bytes(content)
-    
-    # try:
-    #     # 如果没有提供文本，使用 Fun-ASR 转写
-    #     if not text:
-    #         text = await asr.transcribe(
-    #             audio=str(temp_path)
-    #         )
-        
-    #     voice_id = voice_manager.create(name, text, content)
-    #     return {
-    #         "success": True,
-    #         "voice_id": voice_id,
-    #         "name": name,
-    #         "text": text,
-    #         "message": f"音色创建成功，使用 voice='{voice_id}' 调用 /v1/audio/speech"
-    #     }
-    # finally:
-    #     if temp_path.exists():
-    #         temp_path.unlink()
 
 @app.get("/v1/voices/custom")
 async def list_custom_voices():
     """列出所有自定义音色"""
     return {"voices": voice_manager.list_all()}
+
 
 @app.get("/v1/voices/{voice_id}")
 async def get_voice(voice_id: str):
@@ -367,6 +351,7 @@ async def get_voice(voice_id: str):
     if not voice:
         raise HTTPException(404, "Voice not found")
     return voice
+
 
 @app.delete("/v1/voices/{voice_id}")
 async def delete_voice(voice_id: str):
