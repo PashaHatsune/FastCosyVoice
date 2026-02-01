@@ -359,6 +359,11 @@ async def create_voice(
     model = gpu_manager.get_model()
 
     try:
+        voice_manager.create(
+            name=name,
+            audio=audio,
+            text=text
+        )
 
     except Exception as e:
         logger.error(e)
