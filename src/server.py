@@ -123,19 +123,29 @@ class GPUManager:
         self.model_dir = None
         self.lock = threading.Lock()
         self.prompt_cache = {}  # 缓存 prompt 特征
-        
-    def get_model(self, model_dir: str = None):
+
+
+    def get_model(
+        self,
+        model_dir: str = Path("pretrained_models/Fun-CosyVoice3-0.5B")
+    ) -> CosyVoice3:
+
         with self.lock:
             if model_dir is None:
                 model_dir = os.getenv("MODEL_DIR", "pretrained_models/Fun-CosyVoice3-0.5B")
             if self.model is None or self.model_dir != model_dir:
                 self._load_model(model_dir)
             return self.model
-    
-    
-    def _load_model(self, model_dir: str):
+
+
+    def _load_model(
+            self,
+            model_dir: str
+    ) -> None:
+
         if self.model is not None:
             self.offload()
+
         logger.info(f"Загружаем модель: {model_dir}...")
         embed_start = time.time()
         self.model = CosyVoice3(
@@ -148,10 +158,13 @@ class GPUManager:
         embed_time = time.time() - embed_start
 
         logger.success(f"Модель загружена! Время: {embed_time}")
-    
-    
-    def preload(self):
+
+
+    def preload(
+            self
+    ) -> None:
         """启动时预热模型和所有音色的 embedding"""
+
         logger.info("Загружем модель...")
         model = self.get_model()
         logger.success("Модель загружена")
@@ -175,9 +188,13 @@ class GPUManager:
             # print(f"Voice embeddings cached: {len(model.frontend.prompt_cache)}")
         
         print("Model preloaded and ready!")
-    
-    def offload(self):
+
+
+    def offload(
+            self
+    ) -> None:
         """手动卸载模型"""
+
         if self.model:
             del self.model
             self.model = None
@@ -187,16 +204,31 @@ class GPUManager:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             print("GPU memory released")
-    
-    def get_prompt_cache(self, voice_id: str):
+
+
+    def get_prompt_cache(
+            self,
+            voice_id: str
+    ) -> dict:
         """获取缓存的 prompt 特征"""
+
         return self.prompt_cache.get(voice_id)
-    
-    def set_prompt_cache(self, voice_id: str, cache_data: dict):
+
+
+    def set_prompt_cache(
+            self,
+            voice_id: str,
+            cache_data: dict
+    ) -> None:
         """缓存 prompt 特征"""
+
         self.prompt_cache[voice_id] = cache_data
-    
-    def status(self) -> dict:
+
+
+    def status(
+            self
+    ) -> dict:
+
         gpu_info = {"available": torch.cuda.is_available()}
         if torch.cuda.is_available():
             gpu_info.update({
@@ -212,6 +244,7 @@ class GPUManager:
             "gpu": gpu_info,
             "prompt_cache_size": cache_size
         }
+
 
 gpu_manager = GPUManager()
 
